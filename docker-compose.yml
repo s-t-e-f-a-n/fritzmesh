@@ -1,0 +1,17 @@
+version: "3.8"
+
+services:
+  fritzmesh:
+    image: fritzmesh:latest
+    build:
+      context: .
+      dockerfile: ./Dockerfile
+    hostname: fritzmesh
+    restart: always
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+    ports:
+      - "8765:8765"
+    env_file:
+      - ../.secrets/.docker.env
+
