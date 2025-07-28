@@ -297,12 +297,12 @@ def main():
       "fritzMeshPort": fritzMeshPort
   })
   if result is not True:
-    logging.error("Invalid configuration. Please check your settings.", file=sys.stderr)
+    logging.error("Invalid configuration. Please check your settings.")
     return
   try:
     fritzMeshPort = int(fritzMeshPort)
   except ValueError:
-    logging.error("Invalid port number for fritzMeshPort. Please provide a valid integer.", file=sys.stderr)
+    logging.error("Invalid port number for fritzMeshPort. Please provide a valid integer.")
     return
 
   # load previously cached data
@@ -320,7 +320,7 @@ def main():
   # get a valid login and sid from Fritzbox
   mySid = updateLogin()
   if (mySid == invalidSid):
-    logging.error("Could not access Fritzbox. Exiting.", file=sys.stderr)
+    logging.error("Could not access Fritzbox. Exiting.")
     return
     
   if (bootstrapSid == invalidSid):
