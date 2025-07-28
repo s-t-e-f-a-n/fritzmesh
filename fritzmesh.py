@@ -39,10 +39,14 @@ from urllib.parse import urlparse, parse_qsl
 import sys
 import configparser
 from aiohttp import web
+import logging
 
-fritzboxUsername = ''
-fritzboxPassword = ''
-fritzboxHost     = ''
+logging.basicConfig(level=logging.INFO)
+
+fritzboxUsername = None
+fritzboxPassword = None
+fritzboxPassword = None
+fritzboxHost     = None
 
 invalidSid = "0000000000000000"
 entryUrls  = ("/", "/#homeNet", "/start")
@@ -127,7 +131,7 @@ def getResponse(path):
   return myPair
 
 async def do_GET(request):
-  responseHeaders, responseContent = getResponse(request.url.path_qs)
+  responseHeaders, responseContent = getResponse(request.rel_url.path_qs)
   
   if responseHeaders["Content-type"] in sanitizationContentTypes:
     ingressPath = request.headers.get('x-ingress-path')
@@ -156,7 +160,7 @@ async def handleLuaDataRequest(request):
 
 async def prepareLuaResponse(request, response):
   # prevent browser cache of dynamic data
-  if (request.url.path == '/data.lua'):
+  if (request.rel_url.path_qs == '/data.lua'):
     response.headers['Cache-Control'] = 'no-cache'
     response.headers['Expires']       = '-1'
     response.headers['Pragma']        = 'no-cache'
@@ -240,32 +244,65 @@ def main():
   global cachedData
   global fritzboxUsername, fritzboxPassword, fritzboxHost
 
+  def validate_vars(var_map: dict):
+    missing = [name for name, value in var_map.items() if value is None]
+    if missing:
+        logging.error(f"Missing required configuration value(s): {', '.join(missing)}")
+        return False
+    return True
+  
   # load config
-  try:
-    if '-hassio' in sys.argv[1:]:
-      configFilename = '/data/options.json'
-      fritzMeshPort    = 8099
-      cacheFilename = '/data/cache.pickle'
+  if '-hassio' in sys.argv[1:]:
+    configFilename = '/data/options.json'
+    fritzMeshPort    = 8099
+    cacheFilename = '/data/cache.pickle'
+    try:
       with open(configFilename, 'r') as hassConfigFile:
         hassConfig = json.loads(hassConfigFile.read())
         fritzboxUsername = hassConfig["Fritzbox username"]
         fritzboxPassword = hassConfig["Fritzbox password"]
         fritzboxHost     = hassConfig["fritzbox host"]
-    else:
-      configFilename = '/etc/fritzmesh'
-      fritzMeshPort  = 8765
-      cacheFilename  = '/var/cache/fritzmesh/cache.pickle'
-      with open(configFilename, 'r') as f:
-        configString = "[DummyTop]\n" + f.read()
-        config = configparser.ConfigParser()
-        config.read_string(configString)
-        config = config['DummyTop']
-        fritzboxUsername = os.getenv("ROUTERLOGIN",config['fritzboxUsername'])
-        fritzboxPassword = os.getenv("ROUTERPWD",config['fritzboxPassword'])
-        fritzboxHost     = config['fritzboxHost']
-        fritzMeshPort    = config.getint('fritzMeshPort')
-  except (IOError, KeyError):
-    print("Could not read config file '" + configFilename + "'. Exiting.", file=sys.stderr)
+    except Exception as e:
+      logging.error("Error reading config file '%s': %s", configFilename, e)
+      return
+  else:
+    script_dir = os.path.dirname(os.path.realpath(__file__))
+    fallback_path = os.path.join(script_dir, 'fritzmesh')
+    configFilename = '/etc/fritzmesh'
+    #fritzMeshPort  = 8765
+    cacheFilename  = '/var/cache/fritzmesh/cache.pickle'
+    for config_path in ['/etc/fritzmesh', fallback_path]:
+      try:
+        with open(config_path, 'r') as f:
+          configString = "[DummyTop]\n" + f.read()
+          config = configparser.ConfigParser()
+          config.read_string(configString)
+          config = config['DummyTop']
+          fritzboxUsername = config.get('fritzboxUsername')
+          fritzboxPassword = config.get('fritzboxPassword')
+          fritzboxHost     = config.get('fritzboxHost')
+          fritzMeshPort    = config.get('fritzMeshPort')
+      except Exception as e:
+        logging.warning("Skipping config file '%s': %s", config_path, e)
+
+    fritzboxUsername = os.getenv("FRITZBOXUSERNAME",fritzboxUsername)
+    fritzboxPassword = os.getenv("FRITZBOXPASSWORD",fritzboxPassword)
+    fritzboxHost     = os.getenv("FRITZBOXHOST",fritzboxHost)
+    fritzMeshPort    = os.getenv("FRITZMESHPORT",fritzMeshPort)
+
+  result = validate_vars({
+      "fritzboxUsername": fritzboxUsername,
+      "fritzboxPassword": fritzboxPassword,
+      "fritzboxHost": fritzboxHost,
+      "fritzMeshPort": fritzMeshPort
+  })
+  if result is not True:
+    logging.error("Invalid configuration. Please check your settings.", file=sys.stderr)
+    return
+  try:
+    fritzMeshPort = int(fritzMeshPort)
+  except ValueError:
+    logging.error("Invalid port number for fritzMeshPort. Please provide a valid integer.", file=sys.stderr)
     return
 
   # load previously cached data
@@ -283,7 +320,7 @@ def main():
   # get a valid login and sid from Fritzbox
   mySid = updateLogin()
   if (mySid == invalidSid):
-    print("Could not access Fritzbox. Exiting.", file=sys.stderr)
+    logging.error("Could not access Fritzbox. Exiting.", file=sys.stderr)
     return
     
   if (bootstrapSid == invalidSid):
