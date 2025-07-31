@@ -1,5 +1,3 @@
-version: "3.8"
-
 services:
   fritzmesh:
     image: fritzmesh:latest
@@ -13,5 +11,5 @@ services:
     ports:
       - "8765:8765"
     env_file:
-      - ../.secrets/.docker.env
+      - ../.secrets/.env.fritzbox
 

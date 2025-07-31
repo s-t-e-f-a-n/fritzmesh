@@ -269,7 +269,6 @@ def main():
     script_dir = os.path.dirname(os.path.realpath(__file__))
     fallback_path = os.path.join(script_dir, 'fritzmesh')
     configFilename = '/etc/fritzmesh'
-    #fritzMeshPort  = 8765
     cacheFilename  = '/var/cache/fritzmesh/cache.pickle'
     for config_path in ['/etc/fritzmesh', fallback_path]:
       try:
